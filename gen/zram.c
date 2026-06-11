@@ -15,6 +15,7 @@
  */
 
 #include <errno.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,7 +86,29 @@ static long get_swapped_total_size()
     }
 
     fclose(fp);
-    return (swap_total - swap_free) * 1024;
+
+    /* Ensure values fit in signed long before arithmetic */
+    if (swap_total > (unsigned long)LONG_MAX || swap_free > (unsigned long)LONG_MAX) {
+        return LONG_MAX;
+    }
+
+    /* Safe to cast to signed long after validation */
+    long swap_total_l = (long)swap_total;
+    long swap_free_l = (long)swap_free;
+
+    /* Return 0 if no swap is used */
+    if (swap_total_l <= swap_free_l) {
+        return 0;
+    }
+
+    long swapped_kb = swap_total_l - swap_free_l;
+
+    /* Check multiplication won't overflow LONG_MAX */
+    if (swapped_kb > LONG_MAX / 1024) {
+        return LONG_MAX;
+    }
+
+    return swapped_kb * 1024;
 }
 
 int zram_memtrack_get_memory(pid_t pid, enum memtrack_type type,
